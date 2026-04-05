@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:mid_exam_flutter/models/product.dart';
 import 'package:mid_exam_flutter/pages/product_form_page.dart';
 import 'package:mid_exam_flutter/services/auth_service.dart';
@@ -17,17 +21,44 @@ class ProductListPage extends StatefulWidget {
 class _ProductListPageState extends State<ProductListPage> {
   final TextEditingController _searchController = TextEditingController();
 
-  String _searchKeyword = '';
-  String _selectedLoaiSp = 'All';
+  final ValueNotifier<String> _searchKeyword = ValueNotifier('');
+  final ValueNotifier<String> _selectedLoaiSp = ValueNotifier('All');
+
+  late final Stream<List<Product>> _productStream;
+  late final NumberFormat _currencyFormatter;
+
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _productStream = ProductService.instance.streamProducts();
+    _currencyFormatter = NumberFormat('#,###', 'vi_VN');
+
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _searchKeyword.value = _searchController.text.trim();
+    });
+  }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _searchKeyword.dispose();
+    _selectedLoaiSp.dispose();
     super.dispose();
   }
 
   Future<void> _openForm({Product? product}) async {
     final isEdit = product != null;
+
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => ProductFormPage(product: product),
@@ -35,74 +66,87 @@ class _ProductListPageState extends State<ProductListPage> {
     );
 
     if (!mounted) return;
+
     if (result == true) {
       AppSnackbar.showSuccess(
         context,
-        isEdit ? 'Product updated successfully.' : 'Product added successfully.',
+        isEdit
+            ? 'Product updated successfully.'
+            : 'Product added successfully.',
       );
     }
   }
 
   Future<void> _deleteProduct(Product product) async {
-    if (product.docId == null) {
-      AppSnackbar.showError(context, 'Cannot delete: missing document id.');
-      return;
-    }
+    if (product.docId == null) return;
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Confirm Delete'),
-          content: Text(
-              'Are you sure you want to delete product "${product.tensp}"? This action cannot be undone.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: Text(
+          'Are you sure you want to delete "${product.tensp}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
             ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red.shade700,
-              ),
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
 
-    if (confirm != true) {
-      return;
-    }
+    if (confirm != true) return;
 
     try {
       await ProductService.instance.deleteProduct(product.docId!);
+
       if (!mounted) return;
       AppSnackbar.showSuccess(context, 'Product deleted successfully.');
     } catch (e) {
       if (!mounted) return;
-      AppSnackbar.showError(context, e.toString().replaceFirst('Exception: ', ''));
+      AppSnackbar.showError(context, e.toString());
     }
   }
 
   Future<void> _logout() async {
     try {
       await AuthService.instance.signOut();
-      if (!mounted) return;
-      AppSnackbar.showSuccess(context, 'Logged out.');
     } catch (e) {
       if (!mounted) return;
-      AppSnackbar.showError(context, e.toString().replaceFirst('Exception: ', ''));
+      AppSnackbar.showError(context, e.toString());
     }
   }
 
   String _formatGia(double gia) {
-    if (gia % 1 == 0) {
-      return '${gia.toStringAsFixed(0)} VND';
-    }
-    return '${gia.toStringAsFixed(2)} VND';
+    return '${_currencyFormatter.format(gia)} VND';
+  }
+
+  String _normalizeText(String? value) {
+    return (value ?? '').trim().toLowerCase();
+  }
+
+  bool _matchesSearch(Product product, String keyword) {
+    final normalizedKeyword = _normalizeText(keyword);
+
+    if (normalizedKeyword.isEmpty) return true;
+
+    final productId = _normalizeText(product.idsanpham);
+    final tenSp = _normalizeText(product.tensp);
+    final loaiSp = _normalizeText(product.loaisp);
+    final moTa = _normalizeText(product.mota);
+
+    return productId.contains(normalizedKeyword) ||
+        tenSp.contains(normalizedKeyword) ||
+        loaiSp.contains(normalizedKeyword) ||
+        moTa.contains(normalizedKeyword);
   }
 
   @override
@@ -110,40 +154,24 @@ class _ProductListPageState extends State<ProductListPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= 1024;
-        final content = StreamBuilder<List<Product>>(
-          stream: ProductService.instance.streamProducts(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
 
-            if (snapshot.hasError) {
-              return Center(
-                child: Text('Error: ${snapshot.error}'),
-              );
-            }
-
-            final allProducts = snapshot.data ?? [];
-            final categories = <String>{
-              for (final product in allProducts) product.loaisp,
-            }.toList()
-              ..sort();
-
-            final filteredProducts = allProducts.where((product) {
-              final matchesSearch = product.tensp
-                  .toLowerCase()
-                  .contains(_searchKeyword.toLowerCase());
-              final matchesCategory =
-                  _selectedLoaiSp == 'All' || product.loaisp == _selectedLoaiSp;
-              return matchesSearch && matchesCategory;
-            }).toList();
-
-            return _buildMainContent(
-              isDesktop: isDesktop,
-              categories: categories,
-              filteredProducts: filteredProducts,
-            );
-          },
+        final mainContent = Container(
+          color: const Color(0xFFF8FAFC),
+          child: Padding(
+            padding: EdgeInsets.all(isDesktop ? 32 : 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(isDesktop),
+                const SizedBox(height: 32),
+                _buildSearchAndFilter(isDesktop),
+                const SizedBox(height: 32),
+                Expanded(
+                  child: _buildProductListArea(isDesktop),
+                ),
+              ],
+            ),
+          ),
         );
 
         if (isDesktop) {
@@ -155,9 +183,7 @@ class _ProductListPageState extends State<ProductListPage> {
                   child: AdminSidebar(onLogout: _logout),
                 ),
                 const VerticalDivider(width: 1),
-                Expanded(
-                  child: content,
-                ),
+                Expanded(child: mainContent),
               ],
             ),
           );
@@ -171,200 +197,433 @@ class _ProductListPageState extends State<ProductListPage> {
           drawer: Drawer(
             child: AdminSidebar(onLogout: _logout),
           ),
-          body: content,
+          body: mainContent,
         );
       },
     );
   }
 
-  Widget _buildMainContent({
-    required bool isDesktop,
-    required List<String> categories,
-    required List<Product> filteredProducts,
-  }) {
-    return Container(
-      color: const Color(0xFFF8FAFC),
-      child: Padding(
-        padding: EdgeInsets.all(isDesktop ? 32 : 16),
-        child: Column(
-          children: [
-            _buildTopBar(),
-            const SizedBox(height: 24),
-            _buildFilterBar(categories),
-            const SizedBox(height: 24),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  if (filteredProducts.isEmpty) {
-                    return _buildEmptyState();
-                  }
-
-                  if (constraints.maxWidth >= 900) {
-                    return _buildWideTable(filteredProducts);
-                  }
-                  return _buildMobileList(filteredProducts);
-                },
+  Widget _buildHeader(bool isDesktop) {
+    if (!isDesktop) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Inventory',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Manage and track your products efficiently',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _openForm(),
+              icon: const Icon(Icons.add),
+              label: const Text(
+                'New Product',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 18,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
+          ),
+        ],
+      );
+    }
 
-  Widget _buildTopBar() {
-    final theme = Theme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Inventory Management',
-              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+              'Inventory',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
             ),
             Text(
-              'Track and manage your product stock',
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
+              'Manage and track your products efficiently',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
         FilledButton.icon(
           onPressed: () => _openForm(),
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          ),
           icon: const Icon(Icons.add),
-          label: const Text('New Product'),
+          label: const Text(
+            'New Product',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 20,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildFilterBar(List<String> categories) {
+  Widget _buildSearchAndFilter(bool isDesktop) {
+    if (!isDesktop) {
+      return Column(
+        children: [
+          _buildSearchField(),
+          const SizedBox(height: 16),
+          _buildCategoryDropdown(),
+        ],
+      );
+    }
+
     return Row(
       children: [
         Expanded(
-          flex: 3,
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search products...',
-              prefixIcon: const Icon(Icons.search),
-              fillColor: Colors.white,
-              filled: true,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-            ),
-            onChanged: (value) => setState(() => _searchKeyword = value.trim()),
-          ),
+          flex: 4,
+          child: _buildSearchField(),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 20),
         Expanded(
           flex: 1,
-          child: DropdownButtonFormField<String>(
-            value: _selectedLoaiSp,
-            decoration: InputDecoration(
-              fillColor: Colors.white,
-              filled: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
-              ),
-            ),
-            items: ['All', ...categories]
-                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedLoaiSp = v ?? 'All'),
-          ),
+          child: _buildCategoryDropdown(),
         ),
       ],
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search products by name or description...',
+          prefixIcon: const Icon(Icons.search, color: Colors.blueGrey),
+          fillColor: Colors.white,
+          filled: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 20),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryDropdown() {
+    return StreamBuilder<List<Product>>(
+      stream: _productStream,
+      builder: (context, snapshot) {
+        final allProducts = snapshot.data ?? [];
+        final categories = <String>{
+          for (final p in allProducts)
+            if (p.loaisp.trim().isNotEmpty) p.loaisp.trim(),
+        }.toList()
+          ..sort();
+
+        return ValueListenableBuilder<String>(
+          valueListenable: _selectedLoaiSp,
+          builder: (context, currentCategory, _) {
+            final items = ['All', ...categories];
+            final validValue = items.contains(currentCategory)
+                ? currentCategory
+                : 'All';
+
+            if (validValue != currentCategory) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_selectedLoaiSp.value != validValue) {
+                  _selectedLoaiSp.value = validValue;
+                }
+              });
+            }
+
+            return Container(
+              decoration: BoxDecoration(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: DropdownButtonFormField<String>(
+                value: validValue,
+                decoration: InputDecoration(
+                  fillColor: Colors.white,
+                  filled: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 20,
+                  ),
+                ),
+                items: items
+                    .map(
+                      (c) => DropdownMenuItem<String>(
+                    value: c,
+                    child: Text(c),
+                  ),
+                )
+                    .toList(),
+                onChanged: (v) {
+                  _selectedLoaiSp.value = v ?? 'All';
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildProductListArea(bool isDesktop) {
+    return StreamBuilder<List<Product>>(
+      stream: _productStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Failed to load products: ${snapshot.error}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+          );
+        }
+
+        final allProducts = snapshot.data ?? [];
+
+        return ValueListenableBuilder2<String, String>(
+          listenable1: _searchKeyword,
+          listenable2: _selectedLoaiSp,
+          builder: (context, keyword, category, _) {
+            final filtered = allProducts.where((p) {
+              final matchesSearch = _matchesSearch(p, keyword);
+              final matchesCategory =
+                  category == 'All' || p.loaisp.trim() == category;
+              return matchesSearch && matchesCategory;
+            }).toList();
+
+            if (filtered.isEmpty) {
+              return _buildEmptyState();
+            }
+
+            return isDesktop
+                ? _buildWideTable(filtered)
+                : _buildMobileList(filtered);
+          },
+        );
+      },
     );
   }
 
   Widget _buildWideTable(List<Product> products) {
-    final theme = Theme.of(context);
     return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 350),
-          child: DataTable(
-            headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
-            dataRowMaxHeight: 80,
-            columns: const [
-              DataColumn(label: Text('Product')),
-              DataColumn(label: Text('Category')),
-              DataColumn(label: Text('Price')),
-              DataColumn(label: Text('Actions')),
-            ],
-            rows: products
-                .map((product) => DataRow(
-                      cells: [
-                        DataCell(
+      child: Column(
+        children: [
+          Container(
+            color: Colors.grey.shade50,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 20,
+            ),
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(4),
+                1: FlexColumnWidth(2),
+                2: FlexColumnWidth(2),
+                3: FlexColumnWidth(1.5),
+              },
+              children: const [
+                TableRow(
+                  children: [
+                    Text(
+                      'PRODUCT',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'CATEGORY',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'PRICE',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'ACTIONS',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey,
+                        fontSize: 13,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView.separated(
+              itemCount: products.length,
+              separatorBuilder: (context, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final p = products[index];
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 16,
+                  ),
+                  child: Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(4),
+                      1: FlexColumnWidth(2),
+                      2: FlexColumnWidth(2),
+                      3: FlexColumnWidth(1.5),
+                    },
+                    defaultVerticalAlignment:
+                    TableCellVerticalAlignment.middle,
+                    children: [
+                      TableRow(
+                        children: [
                           Row(
                             children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: ProductImageBox(
-                                    imageUrl: product.hinhanh, width: 50, height: 50),
+                              ProductImageBox(
+                                imageUrl: p.hinhanh,
+                                width: 50,
+                                height: 50,
                               ),
                               const SizedBox(width: 16),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(product.tensp,
-                                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                                ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      p.tensp,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    Text(
+                                      'ID: ${p.idsanpham}',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        DataCell(
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(product.loaisp,
-                                style: TextStyle(
-                                    color: theme.colorScheme.primary, fontSize: 12)),
+                          Text(
+                            p.loaisp,
+                            style: const TextStyle(fontSize: 14),
                           ),
-                        ),
-                        DataCell(Text(_formatGia(product.gia),
-                            style: const TextStyle(fontWeight: FontWeight.w600))),
-                        DataCell(
+                          Text(
+                            _formatGia(p.gia),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                                onPressed: () => _openForm(product: product),
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () => _openForm(product: p),
                                 tooltip: 'Edit',
                               ),
+                              const SizedBox(width: 8),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                onPressed: () => _deleteProduct(product),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _deleteProduct(p),
                                 tooltip: 'Delete',
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ))
-                .toList(),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -372,51 +631,58 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget _buildMobileList(List<Product> products) {
     return ListView.separated(
       itemCount: products.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
-        final product = products[index];
+        final p = products[index];
         return Card(
-          elevation: 0,
+          elevation: 2,
+          shadowColor: Colors.black12,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: ProductImageBox(
+              imageUrl: p.hinhanh,
+              width: 64,
+              height: 64,
+            ),
+            title: Text(
+              p.tensp,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: ProductImageBox(imageUrl: product.hinhanh, width: 80, height: 80),
+                const SizedBox(height: 8),
+                Text(
+                  'Category: ${p.loaisp}',
+                  style: TextStyle(color: Colors.grey.shade600),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(product.tensp,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text('Category: ${product.loaisp}',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                      Text(_formatGia(product.gia),
-                          style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.bold)),
-                    ],
+                const SizedBox(height: 4),
+                Text(
+                  _formatGia(p.gia),
+                  style: TextStyle(
+                    color: Theme.of(context).primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
                 ),
-                Column(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                      onPressed: () => _openForm(product: product),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => _deleteProduct(product),
-                    ),
-                  ],
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                  onPressed: () => _openForm(product: p),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => _deleteProduct(p),
                 ),
               ],
             ),
@@ -431,11 +697,67 @@ class _ProductListPageState extends State<ProductListPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          const Text('No products found', style: TextStyle(color: Colors.grey, fontSize: 16)),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.search_off_rounded,
+              size: 80,
+              color: Colors.grey.shade400,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'No products match your search',
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Try adjusting your filters or keywords',
+            style: TextStyle(color: Colors.grey),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class ValueListenableBuilder2<A, B> extends StatelessWidget {
+  const ValueListenableBuilder2({
+    super.key,
+    required this.listenable1,
+    required this.listenable2,
+    required this.builder,
+  });
+
+  final ValueListenable<A> listenable1;
+  final ValueListenable<B> listenable2;
+  final Widget Function(
+      BuildContext context,
+      A a,
+      B b,
+      Widget? child,
+      ) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<A>(
+      valueListenable: listenable1,
+      builder: (context, a, _) {
+        return ValueListenableBuilder<B>(
+          valueListenable: listenable2,
+          builder: (context, b, _) {
+            return builder(context, a, b, null);
+          },
+        );
+      },
     );
   }
 }

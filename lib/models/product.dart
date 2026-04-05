@@ -8,6 +8,7 @@ class Product {
     required this.loaisp,
     required this.gia,
     required this.hinhanh,
+    this.mota,
   });
 
   final String? docId;
@@ -16,6 +17,7 @@ class Product {
   final String loaisp;
   final double gia;
   final String hinhanh;
+  final String? mota;
 
   factory Product.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? <String, dynamic>{};
@@ -26,6 +28,7 @@ class Product {
       loaisp: (data['loaisp'] ?? '').toString(),
       gia: _parseGia(data['gia']),
       hinhanh: (data['hinhanh'] ?? '').toString(),
+      mota: data['mota']?.toString(),
     );
   }
 
@@ -36,6 +39,7 @@ class Product {
       'loaisp': loaisp,
       'gia': gia,
       'hinhanh': hinhanh,
+      if (mota != null) 'mota': mota,
     };
   }
 

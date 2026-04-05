@@ -137,6 +137,7 @@ class _ProductFormPageState extends State<ProductFormPage> {
       loaisp: _loaispController.text.trim(),
       gia: giaValue,
       hinhanh: _hinhanh,
+      mota: widget.product?.mota,
     );
 
     try {
