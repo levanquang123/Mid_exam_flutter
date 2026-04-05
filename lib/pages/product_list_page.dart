@@ -23,6 +23,12 @@ class _ProductListPageState extends State<ProductListPage> {
 
   final ValueNotifier<String> _searchKeyword = ValueNotifier('');
   final ValueNotifier<String> _selectedLoaiSp = ValueNotifier('All');
+  final ValueNotifier<String> _selectedSort = ValueNotifier('Name A-Z');
+
+  static const String _sortNameAsc = 'Name A-Z';
+  static const String _sortNameDesc = 'Name Z-A';
+  static const String _sortPriceAsc = 'Price Low-High';
+  static const String _sortPriceDesc = 'Price High-Low';
 
   late final Stream<List<Product>> _productStream;
   late final NumberFormat _currencyFormatter;
@@ -53,6 +59,7 @@ class _ProductListPageState extends State<ProductListPage> {
     _searchController.dispose();
     _searchKeyword.dispose();
     _selectedLoaiSp.dispose();
+    _selectedSort.dispose();
     super.dispose();
   }
 
@@ -147,6 +154,37 @@ class _ProductListPageState extends State<ProductListPage> {
         tenSp.contains(normalizedKeyword) ||
         loaiSp.contains(normalizedKeyword) ||
         moTa.contains(normalizedKeyword);
+  }
+
+  List<Product> _applySort(List<Product> products, String sortKey) {
+    final sorted = [...products];
+
+    switch (sortKey) {
+      case _sortNameAsc:
+        sorted.sort((a, b) => a.tensp.toLowerCase().compareTo(b.tensp.toLowerCase()));
+        break;
+      case _sortNameDesc:
+        sorted.sort((a, b) => b.tensp.toLowerCase().compareTo(a.tensp.toLowerCase()));
+        break;
+      case _sortPriceAsc:
+        sorted.sort((a, b) => a.gia.compareTo(b.gia));
+        break;
+      case _sortPriceDesc:
+        sorted.sort((a, b) => b.gia.compareTo(a.gia));
+        break;
+      default:
+        sorted.sort((a, b) => a.tensp.toLowerCase().compareTo(b.tensp.toLowerCase()));
+        break;
+    }
+
+    return sorted;
+  }
+
+  void _resetFilters() {
+    _searchController.clear();
+    _searchKeyword.value = '';
+    _selectedLoaiSp.value = 'All';
+    _selectedSort.value = _sortNameAsc;
   }
 
   @override
@@ -300,20 +338,50 @@ class _ProductListPageState extends State<ProductListPage> {
           _buildSearchField(),
           const SizedBox(height: 16),
           _buildCategoryDropdown(),
+          const SizedBox(height: 16),
+          _buildSortDropdown(),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _resetFilters,
+              icon: const Icon(Icons.restart_alt),
+              label: const Text('Reset filters'),
+            ),
+          ),
         ],
       );
     }
 
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          flex: 4,
-          child: _buildSearchField(),
+        Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: _buildSearchField(),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              flex: 1,
+              child: _buildCategoryDropdown(),
+            ),
+          ],
         ),
-        const SizedBox(width: 20),
-        Expanded(
-          flex: 1,
-          child: _buildCategoryDropdown(),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(child: _buildSortDropdown()),
+            const SizedBox(width: 16),
+            SizedBox(
+              height: 56,
+              child: OutlinedButton.icon(
+                onPressed: _resetFilters,
+                icon: const Icon(Icons.restart_alt),
+                label: const Text('Reset'),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -417,6 +485,59 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
+  Widget _buildSortDropdown() {
+    return ValueListenableBuilder<String>(
+      valueListenable: _selectedSort,
+      builder: (context, currentSort, _) {
+        final items = const [
+          _sortNameAsc,
+          _sortNameDesc,
+          _sortPriceAsc,
+          _sortPriceDesc,
+        ];
+
+        return Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: DropdownButtonFormField<String>(
+            value: items.contains(currentSort) ? currentSort : _sortNameAsc,
+            decoration: InputDecoration(
+              labelText: 'Sort by',
+              fillColor: Colors.white,
+              filled: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 20,
+              ),
+            ),
+            items: items
+                .map(
+                  (value) => DropdownMenuItem<String>(
+                    value: value,
+                    child: Text(value),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              _selectedSort.value = value ?? _sortNameAsc;
+            },
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildProductListArea(bool isDesktop) {
     return StreamBuilder<List<Product>>(
       stream: _productStream,
@@ -442,20 +563,26 @@ class _ProductListPageState extends State<ProductListPage> {
           listenable1: _searchKeyword,
           listenable2: _selectedLoaiSp,
           builder: (context, keyword, category, _) {
-            final filtered = allProducts.where((p) {
-              final matchesSearch = _matchesSearch(p, keyword);
-              final matchesCategory =
-                  category == 'All' || p.loaisp.trim() == category;
-              return matchesSearch && matchesCategory;
-            }).toList();
+            return ValueListenableBuilder<String>(
+              valueListenable: _selectedSort,
+              builder: (context, sortKey, _) {
+                final filtered = allProducts.where((p) {
+                  final matchesSearch = _matchesSearch(p, keyword);
+                  final matchesCategory =
+                      category == 'All' || p.loaisp.trim() == category;
+                  return matchesSearch && matchesCategory;
+                }).toList();
+                final sorted = _applySort(filtered, sortKey);
 
-            if (filtered.isEmpty) {
-              return _buildEmptyState();
-            }
+                if (sorted.isEmpty) {
+                  return _buildEmptyState();
+                }
 
-            return isDesktop
-                ? _buildWideTable(filtered)
-                : _buildMobileList(filtered);
+                return isDesktop
+                    ? _buildWideTable(sorted)
+                    : _buildMobileList(sorted);
+              },
+            );
           },
         );
       },
