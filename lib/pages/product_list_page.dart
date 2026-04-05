@@ -54,19 +54,19 @@ class _ProductListPageState extends State<ProductListPage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Confirm Delete'),
-          content: Text('Delete product "${product.tensp}"?'),
+          content: Text(
+              'Are you sure you want to delete product "${product.tensp}"? This action cannot be undone.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Cancel'),
             ),
-            FilledButton.icon(
+            FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red.shade700,
               ),
               onPressed: () => Navigator.pop(context, true),
-              icon: const Icon(Icons.delete_outline),
-              label: const Text('Delete'),
+              child: const Text('Delete'),
             ),
           ],
         );
@@ -151,9 +151,10 @@ class _ProductListPageState extends State<ProductListPage> {
             body: Row(
               children: [
                 SizedBox(
-                  width: 250,
+                  width: 260,
                   child: AdminSidebar(onLogout: _logout),
                 ),
+                const VerticalDivider(width: 1),
                 Expanded(
                   child: content,
                 ),
@@ -164,7 +165,8 @@ class _ProductListPageState extends State<ProductListPage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Admin Panel'),
+            title: const Text('Admin Dashboard'),
+            elevation: 0,
           ),
           drawer: Drawer(
             child: AdminSidebar(onLogout: _logout),
@@ -180,220 +182,188 @@ class _ProductListPageState extends State<ProductListPage> {
     required List<String> categories,
     required List<Product> filteredProducts,
   }) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(isDesktop ? 24 : 16, 20, isDesktop ? 24 : 16, 16),
-      child: Column(
-        children: [
-          _buildTopBar(),
-          const SizedBox(height: 16),
-          _buildFilterBar(categories),
-          const SizedBox(height: 16),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (filteredProducts.isEmpty) {
-                  return _buildEmptyState();
-                }
+    return Container(
+      color: const Color(0xFFF8FAFC),
+      child: Padding(
+        padding: EdgeInsets.all(isDesktop ? 32 : 16),
+        child: Column(
+          children: [
+            _buildTopBar(),
+            const SizedBox(height: 24),
+            _buildFilterBar(categories),
+            const SizedBox(height: 24),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (filteredProducts.isEmpty) {
+                    return _buildEmptyState();
+                  }
 
-                if (constraints.maxWidth >= 900) {
-                  return _buildWideTable(filteredProducts);
-                }
-                return _buildMobileList(filteredProducts);
-              },
+                  if (constraints.maxWidth >= 900) {
+                    return _buildWideTable(filteredProducts);
+                  }
+                  return _buildMobileList(filteredProducts);
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildTopBar() {
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 680;
-        final heading = Column(
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Products',
-              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+              'Inventory Management',
+              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 2),
             Text(
-              'Manage product list for admin panel',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              'Track and manage your product stock',
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
             ),
           ],
-        );
-
-        final actions = Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            FilledButton.icon(
-              onPressed: () => _openForm(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add Product'),
-            ),
-          ],
-        );
-
-        if (isWide) {
-          return Row(
-            children: [
-              Expanded(child: heading),
-              const SizedBox(width: 12),
-              actions,
-            ],
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            heading,
-            const SizedBox(height: 12),
-            actions,
-          ],
-        );
-      },
+        ),
+        FilledButton.icon(
+          onPressed: () => _openForm(),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          icon: const Icon(Icons.add),
+          label: const Text('New Product'),
+        ),
+      ],
     );
   }
 
   Widget _buildFilterBar(List<String> categories) {
-    final dropdownItems = ['All', ...categories];
-    final currentSelected =
-        dropdownItems.contains(_selectedLoaiSp) ? _selectedLoaiSp : 'All';
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final searchWidth = constraints.maxWidth < 340 ? constraints.maxWidth : 320.0;
-            final filterWidth = constraints.maxWidth < 240 ? constraints.maxWidth : 220.0;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                SizedBox(
-                  width: searchWidth,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      labelText: 'Search by tensp',
-                      hintText: 'Enter product name...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchKeyword.isNotEmpty
-                          ? IconButton(
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() {
-                                  _searchKeyword = '';
-                                });
-                              },
-                              icon: const Icon(Icons.clear),
-                            )
-                          : null,
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchKeyword = value.trim();
-                      });
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: filterWidth,
-                  child: DropdownButtonFormField<String>(
-                    value: currentSelected,
-                    decoration: const InputDecoration(
-                      labelText: 'Filter by loaisp',
-                    ),
-                    items: dropdownItems
-                        .map(
-                          (category) => DropdownMenuItem<String>(
-                            value: category,
-                            child: Text(category),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedLoaiSp = value ?? 'All';
-                      });
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
+    return Row(
+      children: [
+        Expanded(
+          flex: 3,
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search products...',
+              prefixIcon: const Icon(Icons.search),
+              fillColor: Colors.white,
+              filled: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+            ),
+            onChanged: (value) => setState(() => _searchKeyword = value.trim()),
+          ),
         ),
-      ),
+        const SizedBox(width: 16),
+        Expanded(
+          flex: 1,
+          child: DropdownButtonFormField<String>(
+            value: _selectedLoaiSp,
+            decoration: InputDecoration(
+              fillColor: Colors.white,
+              filled: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade200),
+              ),
+            ),
+            items: ['All', ...categories]
+                .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedLoaiSp = v ?? 'All'),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildWideTable(List<Product> products) {
     final theme = Theme.of(context);
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingTextStyle: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          columns: const [
-            DataColumn(label: Text('Image')),
-            DataColumn(label: Text('tensp')),
-            DataColumn(label: Text('loaisp')),
-            DataColumn(label: Text('gia')),
-            DataColumn(label: Text('Actions')),
-          ],
-          rows: products
-              .map(
-                (product) => DataRow(
-                  cells: [
-                    DataCell(ProductImageBox(imageUrl: product.hinhanh, width: 64, height: 64)),
-                    DataCell(
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(product.tensp),
-                          Text(
-                            'ID: ${product.idsanpham}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width - 350),
+          child: DataTable(
+            headingRowColor: MaterialStateProperty.all(Colors.grey.shade50),
+            dataRowMaxHeight: 80,
+            columns: const [
+              DataColumn(label: Text('Product')),
+              DataColumn(label: Text('Category')),
+              DataColumn(label: Text('Price')),
+              DataColumn(label: Text('Actions')),
+            ],
+            rows: products
+                .map((product) => DataRow(
+                      cells: [
+                        DataCell(
+                          Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: ProductImageBox(
+                                    imageUrl: product.hinhanh, width: 50, height: 50),
+                              ),
+                              const SizedBox(width: 16),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(product.tensp,
+                                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        DataCell(
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(20),
                             ),
+                            child: Text(product.loaisp,
+                                style: TextStyle(
+                                    color: theme.colorScheme.primary, fontSize: 12)),
                           ),
-                        ],
-                      ),
-                    ),
-                    DataCell(Text(product.loaisp)),
-                    DataCell(Text(_formatGia(product.gia))),
-                    DataCell(
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () => _openForm(product: product),
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            label: const Text('Edit'),
+                        ),
+                        DataCell(Text(_formatGia(product.gia),
+                            style: const TextStyle(fontWeight: FontWeight.w600))),
+                        DataCell(
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                                onPressed: () => _openForm(product: product),
+                                tooltip: 'Edit',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                onPressed: () => _deleteProduct(product),
+                                tooltip: 'Delete',
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          IconButton.filledTonal(
-                            tooltip: 'Delete',
-                            onPressed: () => _deleteProduct(product),
-                            icon: Icon(Icons.delete_outline, color: Colors.red.shade700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              )
-              .toList(),
+                        ),
+                      ],
+                    ))
+                .toList(),
+          ),
         ),
       ),
     );
@@ -402,50 +372,51 @@ class _ProductListPageState extends State<ProductListPage> {
   Widget _buildMobileList(List<Product> products) {
     return ListView.separated(
       itemCount: products.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final product = products[index];
         return Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: Colors.grey.shade200),
+          ),
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(16),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ProductImageBox(imageUrl: product.hinhanh, width: 84, height: 84),
-                const SizedBox(width: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: ProductImageBox(imageUrl: product.hinhanh, width: 80, height: 80),
+                ),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        product.tensp,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
+                      Text(product.tensp,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       const SizedBox(height: 4),
-                      Text('ID: ${product.idsanpham}'),
-                      Text('Loai: ${product.loaisp}'),
-                      Text('Gia: ${_formatGia(product.gia)}'),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () => _openForm(product: product),
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('Edit'),
-                          ),
-                          FilledButton.tonalIcon(
-                            onPressed: () => _deleteProduct(product),
-                            icon: Icon(Icons.delete_outline, color: Colors.red.shade700),
-                            label: const Text('Delete'),
-                          ),
-                        ],
-                      ),
+                      Text('Category: ${product.loaisp}',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                      Text(_formatGia(product.gia),
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.bold)),
                     ],
                   ),
+                ),
+                Column(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                      onPressed: () => _openForm(product: product),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
+                      onPressed: () => _deleteProduct(product),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -456,27 +427,14 @@ class _ProductListPageState extends State<ProductListPage> {
   }
 
   Widget _buildEmptyState() {
-    final theme = Theme.of(context);
     return Center(
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.inventory_2_outlined,
-                size: 52,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'No products found',
-                style: theme.textTheme.titleMedium,
-              ),
-            ],
-          ),
-        ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          const Text('No products found', style: TextStyle(color: Colors.grey, fontSize: 16)),
+        ],
       ),
     );
   }
