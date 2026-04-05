@@ -195,19 +195,22 @@ class _ProductListPageState extends State<ProductListPage> {
 
         final mainContent = Container(
           color: const Color(0xFFF8FAFC),
-          child: Padding(
-            padding: EdgeInsets.all(isDesktop ? 32 : 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(isDesktop),
-                const SizedBox(height: 32),
-                _buildSearchAndFilter(isDesktop),
-                const SizedBox(height: 32),
-                Expanded(
-                  child: _buildProductListArea(isDesktop),
-                ),
-              ],
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(isDesktop ? 32 : 16, isDesktop ? 32 : 16, isDesktop ? 32 : 16, isDesktop ? 32 : 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(isDesktop),
+                  const SizedBox(height: 24),
+                  _buildSearchAndFilter(isDesktop),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: _buildProductListArea(isDesktop),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -767,49 +770,81 @@ class _ProductListPageState extends State<ProductListPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: ProductImageBox(
-              imageUrl: p.hinhanh,
-              width: 64,
-              height: 64,
-            ),
-            title: Text(
-              p.tensp,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            subtitle: Column(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 8),
-                Text(
-                  'Category: ${p.loaisp}',
-                  style: TextStyle(color: Colors.grey.shade600),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ProductImageBox(
+                      imageUrl: p.hinhanh,
+                      width: 68,
+                      height: 68,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.tensp,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'ID: ${p.idsanpham}',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            p.loaisp,
+                            style: TextStyle(
+                              color: Colors.blueGrey.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _formatGia(p.gia),
-                  style: TextStyle(
-                    color: Theme.of(context).primaryColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                  onPressed: () => _openForm(product: p),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () => _deleteProduct(p),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _formatGia(p.gia),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _openForm(product: p),
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit'),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => _deleteProduct(p),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                      label: const Text('Delete'),
+                    ),
+                  ],
                 ),
               ],
             ),

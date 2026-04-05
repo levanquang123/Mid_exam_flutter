@@ -313,40 +313,79 @@ class _ProductFormPageState extends State<ProductFormPage> {
                       const SizedBox(height: 40),
 
                       // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: isBusy ? null : () => Navigator.of(context).pop(false),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                side: BorderSide(color: Colors.grey.shade400),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isNarrow = constraints.maxWidth < 420;
+                          if (isNarrow) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed: isBusy ? null : _saveProduct,
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                  ),
+                                  icon: _isSaving
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Icon(widget.isEdit ? Icons.check : Icons.save),
+                                  label: Text(widget.isEdit ? 'Update Product' : 'Save Product'),
+                                ),
+                                const SizedBox(height: 10),
+                                OutlinedButton(
+                                  onPressed: isBusy ? null : () => Navigator.of(context).pop(false),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    side: BorderSide(color: Colors.grey.shade400),
+                                  ),
+                                  child: const Text('Cancel'),
+                                ),
+                              ],
+                            );
+                          }
+
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: isBusy ? null : () => Navigator.of(context).pop(false),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    side: BorderSide(color: Colors.grey.shade400),
+                                  ),
+                                  child: const Text('Cancel'),
+                                ),
                               ),
-                              child: const Text('Cancel'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
-                            child: FilledButton.icon(
-                              onPressed: isBusy ? null : _saveProduct,
-                              style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 2,
+                                child: FilledButton.icon(
+                                  onPressed: isBusy ? null : _saveProduct,
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                  ),
+                                  icon: _isSaving
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Icon(widget.isEdit ? Icons.check : Icons.save),
+                                  label: Text(widget.isEdit ? 'Update Product' : 'Save Product'),
+                                ),
                               ),
-                              icon: _isSaving
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : Icon(widget.isEdit ? Icons.check : Icons.save),
-                              label: Text(widget.isEdit ? 'Update Product' : 'Save Product'),
-                            ),
-                          ),
-                        ],
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

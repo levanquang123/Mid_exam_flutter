@@ -1,10 +1,8 @@
 import 'dart:typed_data';
-import 'dart:ui_web' as ui_web;
+
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'package:mid_exam_flutter/widgets/product_network_image_view.dart';
 
 class ProductImageBox extends StatelessWidget {
   const ProductImageBox({
@@ -33,13 +31,10 @@ class ProductImageBox extends StatelessWidget {
     }
 
     final trimmedUrl = imageUrl!.trim();
-
-    // Trên Web, sử dụng HtmlElementView để né lỗi CORS hoàn toàn
-    if (kIsWeb && trimmedUrl.startsWith('http')) {
-      return _container(child: _webImage(trimmedUrl));
+    if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+      return _container(child: buildProductNetworkImage(trimmedUrl, fit));
     }
 
-    // Nếu không phải Web hoặc là Storage Path, dùng logic cũ
     return _container(
       child: FutureBuilder<String?>(
         key: ValueKey(trimmedUrl),
@@ -60,35 +55,10 @@ class ProductImageBox extends StatelessWidget {
             return _placeholder(hasError: true);
           }
 
-          if (kIsWeb) {
-            return _webImage(resolvedUrl);
-          }
-
-          return Image.network(
-            resolvedUrl,
-            fit: fit,
-            errorBuilder: (context, error, stackTrace) => _placeholder(hasError: true),
-          );
+          return buildProductNetworkImage(resolvedUrl, fit);
         },
       ),
     );
-  }
-
-  Widget _webImage(String url) {
-    // Đăng ký một View cho mỗi URL ảnh
-    final viewId = 'img-${url.hashCode}';
-    
-    // ignore: undefined_prefixed_name
-    ui_web.platformViewRegistry.registerViewFactory(viewId, (int viewId) {
-      final img = html.ImageElement()
-        ..src = url
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.objectFit = fit == BoxFit.cover ? 'cover' : 'contain';
-      return img;
-    });
-
-    return HtmlElementView(key: ValueKey(url), viewType: viewId);
   }
 
   Widget _container({required Widget child}) {

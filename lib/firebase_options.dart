@@ -33,11 +33,11 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyDl4eS4wkMCpak4CMo7fv87sGd1w7n6pto',
+    appId: '1:1011595270572:android:db7525460d61bc90eb8209',
+    messagingSenderId: '1011595270572',
+    projectId: 'mid-exam-flutter',
+    storageBucket: 'mid-exam-flutter.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
